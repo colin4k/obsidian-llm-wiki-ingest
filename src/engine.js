@@ -2,7 +2,7 @@
 /*
  * engine.js —— 摄入流水线本体（对应 Wiki/AGENTS.md 的 Ingest 五步）：
  *
- *   Step 1 扫描     listInboxFiles / discover
+ *   Step 1 扫描     discover
  *   Step 2 分诊     triage()：New / Update / Disputed / No material
  *   Step 3 编译     compile()：产出 Wiki 文章 + 概念页
  *   Step 4 级联     updateConceptPages()：概念页补充要点
@@ -142,13 +142,6 @@ class IngestEngine {
     for (const d of list) {
       if (d) await this.vfs.ensureDir(d);
     }
-  }
-
-  /** 收件箱内所有可处理的 Markdown（含子目录，跳过隐藏/临时文件） */
-  listInboxFiles() {
-    const dir = this.paths.inboxDir;
-    if (!dir) return [];
-    return this.vfs.listFiles(dir).filter((f) => /\.md$/i.test(f.name));
   }
 
   /** 扫描已有知识，作为分诊与编译的上下文 */
@@ -376,7 +369,7 @@ class IngestEngine {
     const hash = md5Of(rawText);
     const size = Buffer.byteLength(rawText, 'utf8');
 
-    // 空文件：只归档（同样遵守“是否移动收件箱外的原文”）
+    // 空文件：只归档（同样遵守“是否移动原文”的开关）
     if (!rawText.trim()) {
       const archived = this.shouldMoveSource(rel)
         ? await this.archiveSource(rel, { dateStr: day })
@@ -389,7 +382,7 @@ class IngestEngine {
         ok: true,
         status: 'skip',
         moved: Boolean(archived),
-        message: archived ? '空文件：仅归档' : '空文件：已记账，原文未移动（不在收件箱）',
+        message: archived ? '空文件：仅归档' : '空文件：已记账，原文未移动',
         ms: Date.now() - started,
       };
     }
@@ -435,7 +428,7 @@ class IngestEngine {
         moved: Boolean(archived),
         message: archived
           ? (triage.reason || '无实质内容：仅归档')
-          : `${triage.reason || '无实质内容'}；原文未移动（不在收件箱）`,
+          : `${triage.reason || '无实质内容'}；原文未移动`,
         ms: Date.now() - started,
       };
     }
@@ -532,7 +525,7 @@ class IngestEngine {
 
     const whereMoved = archivedAbs
       ? `原文 \`${archivedAbs}\``
-      : '原文未移动（不在收件箱，见设置「收件箱之外的文件也移动归档」）';
+      : '原文未移动（设置里关闭了「处理完把原文移入归档」）';
     await this.appendLog(
       `- ${nowIso().slice(0, 16).replace('T', ' ')} **ingest**: [[${title}]] ` +
       `→ ${this.paths.toWikiRel(wikiRel)} · ${whereMoved}\n`,
@@ -635,11 +628,12 @@ class IngestEngine {
   // -------------------------------------------------------------------------
   // 归档
   // -------------------------------------------------------------------------
-  shouldMoveSource(rel) {
-    const inbox = this.paths.inboxDir;
-    const inInbox = inbox && (rel === inbox || rel.startsWith(inbox + '/'));
-    if (inInbox) return this.settings.moveInboxSource !== false;
-    return Boolean(this.settings.moveOutsideInboxSource);
+  /**
+   * 是否移动原文：插件没有“收件箱”概念，用户指定的文件就是待处理的文件，
+   * 处理成功后默认归档；只有显式关掉 moveSource 才保留原处。
+   */
+  shouldMoveSource() {
+    return this.settings.moveSource !== false;
   }
 
   /** 归档目标（不移动）：返回 { destDir, destAbs } */
@@ -777,7 +771,7 @@ class IngestEngine {
     await this.appendLog(
       `- ${nowIso().slice(0, 16).replace('T', ' ')} **skip**: \`${rel}\` ` +
       `(${reason || '无实质内容'})` +
-      `${archived ? ` · 归档 \`${archived}\`` : ' · 原文未移动（不在收件箱）'}\n`,
+      `${archived ? ` · 归档 \`${archived}\`` : ' · 原文未移动'}\n`,
     );
   }
 
@@ -864,7 +858,6 @@ class IngestEngine {
     try { concepts = this.vfs.listMarkdown(this.paths.conceptsDir).length; } catch (_) { /* ignore */ }
     return {
       processed: done.length,
-      inbox: this.listInboxFiles().length,
       wikiPages,
       concepts,
       topics: Array.from(topics.entries()).sort((a, b) => b[1] - a[1]),

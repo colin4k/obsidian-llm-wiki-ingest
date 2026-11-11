@@ -1,7 +1,7 @@
 {
   "id": "llm-wiki-ingest",
   "name": "LLM Wiki Ingest",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minAppVersion": "1.4.0",
   "description": "把剪藏编译进 LLM Wiki 并归档：支持单篇、多选、整目录，兼容 OpenAI 与 Anthropic 两种接口格式。",
   "author": "Colin",

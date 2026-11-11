@@ -129,10 +129,31 @@ async function main() {
     '# 测试文章\n\n这是一篇用于测试的文章正文，包含 MCP 相关内容。\n', 'utf8');
 
   const adapter = new FakeAdapter(vaultDir);
+  const listMarkdownFiles = () => {
+    const out = [];
+    const walk = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+      for (const ent of entries) {
+        if (ent.name.startsWith('.')) continue;
+        const full = path.join(dir, ent.name);
+        if (ent.isDirectory()) { walk(full); continue; }
+        if (!ent.name.endsWith('.md')) continue;
+        const rel = path.relative(vaultDir, full).split(path.sep).join('/');
+        const f = new obsidian.TFile(rel);
+        const st = fs.statSync(full);
+        f.stat = { mtime: st.mtimeMs, size: st.size };
+        out.push(f);
+      }
+    };
+    walk(vaultDir);
+    return out;
+  };
   const app = {
     vault: {
       adapter,
       getAbstractFileByPath: () => null,
+      getMarkdownFiles: listMarkdownFiles,
     },
     workspace: {
       on: () => ({ id: 'ref' }),
@@ -155,12 +176,11 @@ async function main() {
   ok(true, 'onload 执行无异常');
 
   // ---- 2. 注册项 ----
-  eq(plugin.commands.length, 6, '注册 6 条命令');
+  eq(plugin.commands.length, 5, '注册 5 条命令');
   const ids = plugin.commands.map((c) => c.id);
   ok(ids.includes('compile-active'), '有「编译当前文章」命令');
   ok(ids.includes('compile-picker'), '有「多选编译」命令');
   ok(ids.includes('compile-folder'), '有「编译目录」命令');
-  ok(ids.includes('compile-inbox'), '有「编译收件箱」命令');
   ok(ids.includes('show-stats'), '有「统计」命令');
   ok(ids.includes('rebuild-index'), '有「重建索引」命令');
   eq(plugin.ribbons.length, 1, '注册 1 个 Ribbon 按钮');
@@ -174,7 +194,6 @@ async function main() {
   ok(tab.containerEl.children.length > 20, '设置项数量合理');
 
   // ---- 4. 默认设置生效 ----
-  eq(plugin.settings.inboxFolder, 'wallabag', '默认收件箱为 wallabag');
   eq(plugin.settings.wikiRoot, 'Wiki', '默认 Wiki 根为 Wiki');
   eq(plugin.settings.wikiFolder, 'Wiki/Wiki', '默认编译目录为 Wiki/Wiki');
   eq(plugin.settings.apiFormat, 'openai', '默认 OpenAI 格式');
@@ -184,7 +203,6 @@ async function main() {
   plugin.settings.maxConcurrency = 2;
   const engine = plugin.buildEngine();
   ok(engine && typeof engine.processAll === 'function', 'buildEngine 返回引擎');
-  eq(engine.listInboxFiles().length, 1, '引擎能列出收件箱文件');
 
   // ---- 6. 跑一次批处理 ----
   const before = obsidian.Notice.log.length;
@@ -250,12 +268,6 @@ async function main() {
   await plugin.compileActiveFile();
   ok(obsidian.Notice.log.some((n) => n.includes('请先打开一篇文章')), '无活动文件时给出提示');
 
-  // ---- 11. 收件箱为空时的保护 ----
-  plugin.settings.inboxFolder = 'empty-inbox';
-  fs.mkdirSync(path.join(vaultDir, 'empty-inbox'), { recursive: true });
-  obsidian.Notice.log.length = 0;
-  plugin.compileInbox();
-  ok(obsidian.Notice.log.some((n) => n.includes('没有 Markdown 文件')), '空收件箱给出提示');
 
   console.log('');
   console.log(`加载测试：通过 ${passed} 项，失败 ${failed} 项`);

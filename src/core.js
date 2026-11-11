@@ -301,7 +301,6 @@ class WikiPaths {
     this.vfs = vfs;
   }
 
-  get inboxDir() { return normalizeVaultPath(this.s.inboxFolder); }
   get wikiRoot() { return normalizeVaultPath(this.s.wikiRoot) || 'Wiki'; }
   get wikiDir() { return normalizeVaultPath(this.s.wikiFolder) || joinVaultPath(this.wikiRoot, 'Wiki'); }
   get conceptsDir() { return normalizeVaultPath(this.s.conceptsFolder) || joinVaultPath(this.wikiRoot, 'Concepts'); }

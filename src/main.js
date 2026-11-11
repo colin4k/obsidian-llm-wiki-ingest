@@ -39,7 +39,6 @@ const DEFAULT_SETTINGS = {
   extraInstructions: '',
 
   // ---- 路径 ----
-  inboxFolder: 'wallabag',
   wikiRoot: 'Wiki',
   wikiFolder: 'Wiki/Wiki',
   conceptsFolder: 'Wiki/Concepts',
@@ -50,8 +49,7 @@ const DEFAULT_SETTINGS = {
 
   // ---- 行为 ----
   skipDuplicates: true,
-  moveInboxSource: true,
-  moveOutsideInboxSource: false,
+  moveSource: true,
   updateConcepts: true,
   rebuildIndex: true,
   appendLog: true,
@@ -92,11 +90,6 @@ class LLMWikiIngestPlugin extends Plugin {
       id: 'compile-folder',
       name: '编译当前文章所在目录',
       callback: () => this.compileActiveFolder(),
-    });
-    this.addCommand({
-      id: 'compile-inbox',
-      name: '编译整个收件箱',
-      callback: () => this.compileInbox(),
     });
     this.addCommand({
       id: 'show-stats',
@@ -221,24 +214,36 @@ class LLMWikiIngestPlugin extends Plugin {
     this.runBatch(files);
   }
 
-  compileInbox() {
-    const engine = this.buildEngine();
-    const files = engine.listInboxFiles().map((f) => f.rel);
-    if (!files.length) {
-      new Notice(`收件箱（${this.settings.inboxFolder}）里没有 Markdown 文件`);
-      return;
-    }
-    this.runBatch(files);
+  /**
+   * 候选文件：整个 vault 的 Markdown，按修改时间倒序。
+   * 排除 Obsidian 内部目录与 Wiki 产物目录（避免把编译结果再当输入）。
+   */
+  collectCandidateFiles() {
+    const root = core.normalizeVaultPath(this.settings.wikiRoot) || 'Wiki';
+    const internal = ['.obsidian', '.trash', '.git'];
+    return this.app.vault.getMarkdownFiles()
+      .filter((f) => {
+        const p = f.path;
+        if (internal.some((d) => p === d || p.startsWith(d + '/'))) return false;
+        if (root && (p === root || p.startsWith(root + '/'))) return false;
+        return true;
+      })
+      .sort((a, b) => b.stat.mtime - a.stat.mtime)
+      .map((f) => ({
+        rel: f.path,
+        name: f.name,
+        size: f.stat.size,
+        mtime: f.stat.mtime,
+      }));
   }
 
   openPicker() {
-    const engine = this.buildEngine();
-    const files = engine.listInboxFiles();
+    const files = this.collectCandidateFiles();
     if (!files.length) {
-      new Notice(`收件箱（${this.settings.inboxFolder}）里没有 Markdown 文件`);
+      new Notice('vault 里没有可处理的 Markdown 文件');
       return;
     }
-    new LWIPickerModal(this.app, files, this.settings.inboxFolder, (selected) => {
+    new LWIPickerModal(this.app, files, (selected) => {
       this.runBatch(selected);
     }).open();
   }
@@ -251,7 +256,6 @@ class LLMWikiIngestPlugin extends Plugin {
       const st = await engine.readStats();
       const lines = [
         `已处理：${st.processed} 篇`,
-        `收件箱剩余：${st.inbox} 篇`,
         `Wiki 文章：${st.wikiPages} 篇`,
         `概念页：${st.concepts} 个`,
       ];
@@ -337,10 +341,9 @@ class LLMWikiIngestPlugin extends Plugin {
 // 文件选择器
 // ---------------------------------------------------------------------------
 class LWIPickerModal extends Modal {
-  constructor(app, files, inboxLabel, onSubmit) {
+  constructor(app, files, onSubmit) {
     super(app);
     this.files = files;
-    this.inboxLabel = inboxLabel;
     this.onSubmit = onSubmit;
     this.selected = new Set();
     this.rows = [];
@@ -349,13 +352,13 @@ class LWIPickerModal extends Modal {
   onOpen() {
     const { contentEl, titleEl } = this;
     contentEl.addClass('llm-wiki-picker');
-    titleEl.setText(`选择要处理的文章（${this.files.length} 篇 · 收件箱 ${this.inboxLabel}）`);
+    titleEl.setText(`选择要处理的文章（共 ${this.files.length} 篇，按修改时间倒序）`);
 
     const toolbar = contentEl.createDiv({ cls: 'lwi-toolbar' });
     this.searchEl = toolbar.createEl('input', {
       cls: 'lwi-search',
       type: 'text',
-      placeholder: '搜索文件名…',
+      placeholder: '搜索文件名或路径…',
     });
     this.searchEl.oninput = () => this.renderList();
 
@@ -396,7 +399,9 @@ class LWIPickerModal extends Modal {
   renderList() {
     if (!this.listEl) return;
     this.listEl.empty();
-    const files = this.visibleFiles();
+    const all = this.visibleFiles();
+    const limit = 300;
+    const files = all.slice(0, limit);
     if (!files.length) {
       this.listEl.createDiv({ cls: 'lwi-item lwi-skip', text: '没有匹配的文件' });
     }
@@ -410,7 +415,14 @@ class LWIPickerModal extends Modal {
         this.updateCount();
       };
       row.createSpan({ cls: 'lwi-item-name', text: f.rel });
-      row.createSpan({ cls: 'lwi-item-meta', text: core.humanBytes(f.size) });
+      const stamp = f.mtime ? new Date(f.mtime).toISOString().slice(0, 10) : '';
+      row.createSpan({ cls: 'lwi-item-meta', text: `${stamp}  ${core.humanBytes(f.size)}` });
+    }
+    if (all.length > limit) {
+      this.listEl.createDiv({
+        cls: 'lwi-item lwi-skip',
+        text: `仅显示前 ${limit} 条（共 ${all.length} 条），用搜索缩小范围`,
+      });
     }
     this.updateCount();
   }
@@ -757,7 +769,6 @@ class LLMWikiIngestSettingTab extends PluginSettingTab {
         .setValue(s[key] || '')
         .onChange(async (v) => { s[key] = v.trim(); await save(); }));
 
-    pathSetting('收件箱目录', '待处理剪藏的目录（含子目录一起扫描）', 'inboxFolder', 'wallabag');
     pathSetting('Wiki 知识库根目录', 'raw / Concepts / _state / _index / _log 都放在这里', 'wikiRoot', 'Wiki');
     pathSetting('编译后文章目录', '编译产出的 Wiki 文章保存位置', 'wikiFolder', 'Wiki/Wiki');
     pathSetting('概念页目录', '原子概念页保存位置', 'conceptsFolder', 'Wiki/Concepts');
@@ -790,18 +801,11 @@ class LLMWikiIngestSettingTab extends PluginSettingTab {
         .onChange(async (v) => { s.skipDuplicates = v; await save(); }));
 
     new Setting(containerEl)
-      .setName('处理完移动收件箱里的原文')
-      .setDesc('关闭后只编译不移动，原文留在收件箱')
+      .setName('处理完把原文移入归档')
+      .setDesc('默认开启：编译成功后原文移入归档目录（插件没有收件箱概念，处理谁就归档谁）。关闭后只编译，原文留在原处')
       .addToggle((t) => t
-        .setValue(s.moveInboxSource !== false)
-        .onChange(async (v) => { s.moveInboxSource = v; await save(); }));
-
-    new Setting(containerEl)
-      .setName('收件箱之外的文件也移动归档')
-      .setDesc('默认关闭：在普通笔记上右键编译时，不会把笔记挪走')
-      .addToggle((t) => t
-        .setValue(Boolean(s.moveOutsideInboxSource))
-        .onChange(async (v) => { s.moveOutsideInboxSource = v; await save(); }));
+        .setValue(s.moveSource !== false)
+        .onChange(async (v) => { s.moveSource = v; await save(); }));
 
     new Setting(containerEl)
       .setName('更新概念页')
@@ -839,7 +843,7 @@ class LLMWikiIngestSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName('查看统计')
-      .setDesc('已处理、收件箱剩余、Wiki 篇数、概念页数')
+      .setDesc('已处理、Wiki 篇数、概念页数')
       .addButton((b) => b.setButtonText('查看').onClick(() => this.plugin.showStats()));
 
     new Setting(containerEl)

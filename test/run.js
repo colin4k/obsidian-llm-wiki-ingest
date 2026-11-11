@@ -163,7 +163,6 @@ function makeSettings(overrides = {}) {
     timeoutSec: 30,
     maxConcurrency: 2,
     extraInstructions: '',
-    inboxFolder: 'wallabag',
     wikiRoot: 'Wiki',
     wikiFolder: 'Wiki/Wiki',
     conceptsFolder: 'Wiki/Concepts',
@@ -172,8 +171,7 @@ function makeSettings(overrides = {}) {
     archiveFolder: '',
     archiveByDate: true,
     skipDuplicates: true,
-    moveInboxSource: true,
-    moveOutsideInboxSource: false,
+    moveSource: true,
     updateConcepts: true,
     rebuildIndex: true,
     appendLog: true,
@@ -337,11 +335,13 @@ async function main() {
   const engine4 = new IngestEngine({ settings, vfs, paths, manifest, client });
   await engine4.manifest.load();
   const r4 = await engine4.processOne(noteRel);
-  eq(r4.status, 'compiled', '收件箱外的笔记也能编译');
-  eq(r4.moved, false, '返回值标注「原文未移动」');
-  ok(fs.existsSync(path.join(vaultDir, noteRel)), '默认不移动收件箱之外的文件');
+  eq(r4.status, 'compiled', '任意位置的笔记都能编译');
+  eq(r4.moved, true, '默认把原文移入归档');
+  ok(!fs.existsSync(path.join(vaultDir, noteRel)), '原文已从原位置移走');
+  ok(fs.existsSync(path.join(archiveDir, dateStr, '普通笔记.md')), '原文已归档');
   const wiki4 = fs.readFileSync(path.join(vaultDir, r4.wikiRel), 'utf8');
-  ok(wiki4.includes(`source: "${path.join(vaultDir, noteRel)}"`), 'source 指向原文件绝对路径');
+  ok(wiki4.includes(`source: "${path.join(archiveDir, dateStr, '普通笔记.md')}"`),
+    'source 回填为归档后的绝对路径');
 
   // -------------------------------------------------------------------------
   // 收件箱外被跳过的文章：记账但不移动（回归用例：skip 分支曾绕过开关）
@@ -352,10 +352,26 @@ async function main() {
   const engine6 = new IngestEngine({ settings, vfs, paths, manifest, client });
   await engine6.manifest.load();
   const r6 = await engine6.processOne('外部/外部广告.md');
-  eq(r6.status, 'skip', '收件箱外的广告被判 skip');
-  eq(r6.moved, false, '跳过时同样不移动收件箱外的原文');
-  ok(fs.existsSync(path.join(vaultDir, '外部', '外部广告.md')), '被跳过的外部原文仍在原处');
-  ok(!fs.existsSync(path.join(archiveDir, dateStr, '外部广告.md')), '外部广告没有被搬进归档');
+  eq(r6.status, 'skip', '外部广告被判 skip');
+  eq(r6.moved, true, '跳过时同样归档原文');
+  ok(!fs.existsSync(path.join(vaultDir, '外部', '外部广告.md')), '被跳过的原文已移走');
+  ok(fs.existsSync(path.join(archiveDir, dateStr, '外部广告.md')), '被跳过的原文进了归档');
+
+  // 关闭「处理完把原文移入归档」时不移动
+  const keepSettings = makeSettings({ archiveFolder: archiveDir, moveSource: false });
+  fs.writeFileSync(path.join(vaultDir, '外部', '不移动.md'), '# 不移动\n\n正文内容。\n', 'utf8');
+  const engine7 = new IngestEngine({
+    settings: keepSettings,
+    vfs,
+    paths: new core.WikiPaths(keepSettings, vfs),
+    manifest,
+    client,
+  });
+  await engine7.manifest.load();
+  const r7 = await engine7.processOne('外部/不移动.md');
+  eq(r7.status, 'compiled', '关闭移动时仍能编译');
+  eq(r7.moved, false, '关闭开关后不移动原文');
+  ok(fs.existsSync(path.join(vaultDir, '外部', '不移动.md')), '原文保留在原处');
 
   // -------------------------------------------------------------------------
   // Anthropic 格式的请求构造
