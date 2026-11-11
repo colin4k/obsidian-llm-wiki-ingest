@@ -81,7 +81,7 @@ node build.js      # 从 src/ 生成单文件 main.js
 | 原文存档目录 | `Wiki/raw` | 不可变原文副本（事实核验依据） |
 | 状态目录 | `Wiki/_state` | `manifest.json` 台账 |
 | 归档目录 | `/Volumes/YSS-3/Wallabag-Archived` | 处理完的原文移动到这里；可填 vault 内相对路径 |
-| 按日期分文件夹 | 开 | 归档到 `<归档目录>/YYYY-MM-DD/` |
+| 按日期分层 | 开 | 归档到 `<归档目录>/年/月/日/`，例如 `2026/11/11/` |
 
 > 归档目录若在 `/Volumes/...` 下且磁盘未挂载，插件会**直接报错中止**，
 > 不会把文件写到错误位置（与 `pipeline.py` 行为一致）。

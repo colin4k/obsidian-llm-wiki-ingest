@@ -784,8 +784,8 @@ class LLMWikiIngestSettingTab extends PluginSettingTab {
         .onChange(async (v) => { s.archiveFolder = v.trim(); await save(); }));
 
     new Setting(containerEl)
-      .setName('归档按日期分文件夹')
-      .setDesc('开启后归档到 <归档目录>/YYYY-MM-DD/')
+      .setName('归档按日期分层')
+      .setDesc('开启后归档到 <归档目录>/年/月/日/（例如 2026/11/11/）')
       .addToggle((t) => t
         .setValue(s.archiveByDate !== false)
         .onChange(async (v) => { s.archiveByDate = v; await save(); }));

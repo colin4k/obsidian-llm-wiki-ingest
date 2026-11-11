@@ -1,6 +1,6 @@
 /* eslint-disable */
 /* LLM Wiki Ingest —— 单文件构建产物（由 build.js 从 src/ 生成，勿直接修改） */
-/* 构建时间：2026-11-11T08:27:59.728Z */
+/* 构建时间：2026-11-11T08:30:45.104Z */
 
 (function () {
   'use strict';
@@ -393,11 +393,12 @@ class WikiPaths {
     return joinVaultPath(this.wikiRoot, p);
   }
 
-  /** 归档日期子目录（archiveByDate 关闭时直接用根目录） */
+  /** 归档日期子目录：按 年/月/日 分层（archiveByDate 关闭时直接用根目录） */
   archiveDateDir(dateStr) {
     const root = this.archiveRootAbs();
     if (!root) return null;
-    return this.s.archiveByDate && dateStr ? path.join(root, dateStr) : root;
+    if (!this.s.archiveByDate || !dateStr) return root;
+    return path.join(root, ...String(dateStr).split('-').filter(Boolean));
   }
 }
 
@@ -1120,8 +1121,10 @@ class IngestEngine {
   archivePlan(rel) {
     const rootAbs = this.paths.archiveRootAbs();
     if (!rootAbs) throw new Error('未配置归档路径（设置 → 路径 → 归档目录）');
+    // 按 年/月/日 分层，便于后续按时间归档管理
+    const day = String(this.batchDate || todayStr());
     const destDir = this.settings.archiveByDate
-      ? path.join(rootAbs, this.batchDate || todayStr())
+      ? path.join(rootAbs, ...day.split('-').filter(Boolean))
       : rootAbs;
     const absSrc = this.paths.vaultAbs(rel);
     if (!absSrc) throw new Error('无法解析 vault 本地路径，归档功能需要桌面端文件系统');
@@ -2499,8 +2502,8 @@ class LLMWikiIngestSettingTab extends PluginSettingTab {
         .onChange(async (v) => { s.archiveFolder = v.trim(); await save(); }));
 
     new Setting(containerEl)
-      .setName('归档按日期分文件夹')
-      .setDesc('开启后归档到 <归档目录>/YYYY-MM-DD/')
+      .setName('归档按日期分层')
+      .setDesc('开启后归档到 <归档目录>/年/月/日/（例如 2026/11/11/）')
       .addToggle((t) => t
         .setValue(s.archiveByDate !== false)
         .onChange(async (v) => { s.archiveByDate = v; await save(); }));

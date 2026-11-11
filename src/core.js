@@ -350,11 +350,12 @@ class WikiPaths {
     return joinVaultPath(this.wikiRoot, p);
   }
 
-  /** 归档日期子目录（archiveByDate 关闭时直接用根目录） */
+  /** 归档日期子目录：按 年/月/日 分层（archiveByDate 关闭时直接用根目录） */
   archiveDateDir(dateStr) {
     const root = this.archiveRootAbs();
     if (!root) return null;
-    return this.s.archiveByDate && dateStr ? path.join(root, dateStr) : root;
+    if (!this.s.archiveByDate || !dateStr) return root;
+    return path.join(root, ...String(dateStr).split('-').filter(Boolean));
   }
 }
 

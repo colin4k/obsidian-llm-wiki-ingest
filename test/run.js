@@ -241,11 +241,12 @@ async function main() {
 
   // 归档：按日期分子目录
   const dateStr = core.todayStr();
-  const archivedPath = path.join(archiveDir, dateStr, 'USDC 与 Circle.md');
+  const archiveDay = path.join(archiveDir, ...dateStr.split('-'));
+  const archivedPath = path.join(archiveDay, 'USDC 与 Circle.md');
   ok(fs.existsSync(archivedPath), '原文已归档到 <归档>/<日期>/');
   eq(fs.readFileSync(archivedPath, 'utf8'), goodArticle, '归档内容与原文一致');
   ok(!fs.existsSync(path.join(inbox, 'USDC 与 Circle.md')), '收件箱里的原文已移走');
-  ok(fs.existsSync(path.join(archiveDir, dateStr, '课程广告.md')), '广告也被归档');
+  ok(fs.existsSync(path.join(archiveDay, '课程广告.md')), '广告也被归档');
   ok(fs.existsSync(path.join(inbox, 'USDC 与 Circle（副本）.md')), '重复文件留在收件箱（未误删）');
 
   // 编译产物
@@ -323,7 +324,7 @@ async function main() {
   await engine3.manifest.load();
   const r3 = await engine3.processOne('wallabag/空文件.md');
   eq(r3.status, 'skip', '空文件被判 skip');
-  ok(fs.existsSync(path.join(archiveDir, dateStr, '空文件.md')), '空文件被归档');
+  ok(fs.existsSync(path.join(archiveDay, '空文件.md')), '空文件被归档');
   ok(!fs.existsSync(path.join(inbox, '空文件.md')), '空文件已移走');
 
   // -------------------------------------------------------------------------
@@ -338,9 +339,9 @@ async function main() {
   eq(r4.status, 'compiled', '任意位置的笔记都能编译');
   eq(r4.moved, true, '默认把原文移入归档');
   ok(!fs.existsSync(path.join(vaultDir, noteRel)), '原文已从原位置移走');
-  ok(fs.existsSync(path.join(archiveDir, dateStr, '普通笔记.md')), '原文已归档');
+  ok(fs.existsSync(path.join(archiveDay, '普通笔记.md')), '原文已归档');
   const wiki4 = fs.readFileSync(path.join(vaultDir, r4.wikiRel), 'utf8');
-  ok(wiki4.includes(`source: "${path.join(archiveDir, dateStr, '普通笔记.md')}"`),
+  ok(wiki4.includes(`source: "${path.join(archiveDay, '普通笔记.md')}"`),
     'source 回填为归档后的绝对路径');
 
   // -------------------------------------------------------------------------
@@ -355,7 +356,7 @@ async function main() {
   eq(r6.status, 'skip', '外部广告被判 skip');
   eq(r6.moved, true, '跳过时同样归档原文');
   ok(!fs.existsSync(path.join(vaultDir, '外部', '外部广告.md')), '被跳过的原文已移走');
-  ok(fs.existsSync(path.join(archiveDir, dateStr, '外部广告.md')), '被跳过的原文进了归档');
+  ok(fs.existsSync(path.join(archiveDay, '外部广告.md')), '被跳过的原文进了归档');
 
   // 关闭「处理完把原文移入归档」时不移动
   const keepSettings = makeSettings({ archiveFolder: archiveDir, moveSource: false });

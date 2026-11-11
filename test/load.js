@@ -213,7 +213,7 @@ async function main() {
   const wikiRel = 'Wiki/Wiki/AI-Agent/插件加载测试文章.md';
   ok(fs.existsSync(path.join(vaultDir, wikiRel)), 'Wiki 文章已生成');
   ok(!fs.existsSync(path.join(inbox, '测试文章.md')), '收件箱原文已归档移走');
-  ok(fs.existsSync(path.join(root, 'archive', core.todayStr(), '测试文章.md')), '归档文件存在');
+  ok(fs.existsSync(path.join(root, 'archive', ...core.todayStr().split('-'), '测试文章.md')), '归档文件存在');
   ok(fs.existsSync(path.join(vaultDir, 'Wiki/Concepts/MCP.md')), '概念页已生成');
   ok(fs.existsSync(path.join(vaultDir, 'Wiki/_index.md')), '索引已重建');
   const manifestData = JSON.parse(fs.readFileSync(path.join(vaultDir, 'Wiki/_state/manifest.json'), 'utf8'));

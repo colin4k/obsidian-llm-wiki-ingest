@@ -640,8 +640,10 @@ class IngestEngine {
   archivePlan(rel) {
     const rootAbs = this.paths.archiveRootAbs();
     if (!rootAbs) throw new Error('未配置归档路径（设置 → 路径 → 归档目录）');
+    // 按 年/月/日 分层，便于后续按时间归档管理
+    const day = String(this.batchDate || todayStr());
     const destDir = this.settings.archiveByDate
-      ? path.join(rootAbs, this.batchDate || todayStr())
+      ? path.join(rootAbs, ...day.split('-').filter(Boolean))
       : rootAbs;
     const absSrc = this.paths.vaultAbs(rel);
     if (!absSrc) throw new Error('无法解析 vault 本地路径，归档功能需要桌面端文件系统');
