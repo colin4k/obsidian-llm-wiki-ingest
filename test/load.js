@@ -99,9 +99,19 @@ const COMPILE = {
   }],
 };
 
+let failCompile = false;
+
 function mockRequestUrl(payload) {
   const parsed = JSON.parse(payload.body);
   const sys = parsed.system || (parsed.messages && parsed.messages[0] && parsed.messages[0].content) || '';
+  if (failCompile && !sys.includes('分诊员')) {
+    // 复现真实故障：模型把原文片段当成了回复
+    return Promise.resolve({
+      status: 200,
+      json: { choices: [{ message: { role: 'assistant', content: 'properties\nrepeat.standalone.mode=false\nbroadcaster.record.url=http://127.0.0.1:8001/facade/api/record/save' } }] },
+      text: '',
+    });
+  }
   const data = sys.includes('分诊员') ? TRIAGE : COMPILE;
   return Promise.resolve({
     status: 200,
@@ -212,6 +222,28 @@ async function main() {
   // ---- 9. 重建索引 ----
   await plugin.rebuildIndexNow();
   ok(fs.existsSync(path.join(vaultDir, 'Wiki/_index.md')), '重建索引成功');
+
+  // ---- 9.5 编译失败：记录失败项、给出重试入口、原文不被移动 ----
+  fs.writeFileSync(path.join(inbox, '会失败的文章.md'), '# 会失败\n\n正文内容。\n', 'utf8');
+  failCompile = true;
+  const noticeBeforeFail = obsidian.Notice.log.length;
+  await plugin.runBatch(['wallabag/会失败的文章.md']);
+  const failModal = obsidian.Modal.instances[obsidian.Modal.instances.length - 1];
+  eq(failModal.failed.length, 1, '失败项被记录');
+  ok(failModal.retryBtn, '结果面板出现重试按钮');
+  ok(String(failModal.retryBtn.textContent).includes('重试失败的 1 篇'), '重试按钮文案正确');
+  ok(typeof failModal.retryBtn.onclick === 'function', '重试按钮可点击');
+  ok(fs.existsSync(path.join(inbox, '会失败的文章.md')), '失败后原文仍在收件箱（未被移动）');
+  ok(obsidian.Notice.log.slice(noticeBeforeFail).some((n) => n.includes('失败 1')), '完成提示里显示失败数');
+
+  // 重试：只重跑失败项，这次让模型正常返回
+  failCompile = false;
+  await plugin.runBatch(['wallabag/会失败的文章.md']);
+  const retryModal = obsidian.Modal.instances[obsidian.Modal.instances.length - 1];
+  eq(retryModal.failed.length, 0, '重试成功后没有失败项');
+  ok(!retryModal.retryBtn, '全部成功时不出现重试按钮');
+  ok(fs.existsSync(path.join(vaultDir, 'Wiki/Wiki/AI-Agent/插件加载测试文章.md')), '重试产出了 Wiki 页面');
+  ok(!fs.existsSync(path.join(inbox, '会失败的文章.md')), '重试成功后原文已归档');
 
   // ---- 10. 活动文件缺失时的保护 ----
   obsidian.Notice.log.length = 0;

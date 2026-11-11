@@ -1,6 +1,6 @@
 /* eslint-disable */
 /* LLM Wiki Ingest —— 单文件构建产物（由 build.js 从 src/ 生成，勿直接修改） */
-/* 构建时间：2026-11-11T07:27:18.809Z */
+/* 构建时间：2026-11-11T08:13:43.430Z */
 
 (function () {
   'use strict';
@@ -2014,7 +2014,10 @@ class LLMWikiIngestPlugin extends Plugin {
       });
 
       const s = engine.stats;
-      modal.finish(s, engine.cancelled);
+      modal.finish(s, engine.cancelled, {
+        // 等本批次 finally 把 running 复位后再开新一批
+        onRetry: (paths) => { setTimeout(() => { this.runBatch(paths); }, 0); },
+      });
       new Notice(
         `LLM Wiki 完成：新编译 ${s.compiled} · 合并更新 ${s.updated} · 跳过 ${s.skip} · ` +
         `重复 ${s.already} · 失败 ${s.error}`,
@@ -2131,6 +2134,7 @@ class LWIProgressModal extends Modal {
     this.total = total;
     this.done = 0;
     this.rowBySrc = new Map();
+    this.failed = [];
     this.onCancelCb = null;
     this.cancelled = false;
   }
@@ -2145,7 +2149,8 @@ class LWIProgressModal extends Modal {
     this.barInner = bar.createDiv({ cls: 'lwi-bar-inner' });
     this.logEl = contentEl.createDiv({ cls: 'lwi-log' });
 
-    const footer = contentEl.createDiv({ cls: 'lwi-footer' });
+    this.footer = contentEl.createDiv({ cls: 'lwi-footer' });
+    const footer = this.footer;
     this.cancelBtn = footer.createEl('button', { text: '取消' });
     this.cancelBtn.onclick = () => {
       this.cancelled = true;
@@ -2169,6 +2174,9 @@ class LWIProgressModal extends Modal {
   itemDone(res) {
     this.done += 1;
     const src = res && res.src ? res.src : '(未知)';
+    if (res && (res.ok === false || res.status === 'error')) {
+      this.failed.push({ src, error: res.error || res.message || '未知错误' });
+    }
     let line = this.rowBySrc.get(src);
     if (!line && this.logEl) {
       line = this.logEl.createDiv({ cls: 'lwi-line' });
@@ -2202,7 +2210,7 @@ class LWIProgressModal extends Modal {
     if (this.logEl) this.logEl.scrollTop = this.logEl.scrollHeight;
   }
 
-  finish(stats, wasCancelled) {
+  finish(stats, wasCancelled, opts = {}) {
     if (!this.summaryEl) return;
     const s = stats || {};
     const tail = wasCancelled ? ' · 已取消' : '';
@@ -2216,6 +2224,23 @@ class LWIProgressModal extends Modal {
       this.closeBtn.onclick = () => this.close();
     }
     if (this.barInner) this.barInner.style.width = '100%';
+
+    // 失败项重试：只重跑出错的那几篇，跳过与已成功的不会重复消耗 token
+    const failed = this.failed || [];
+    if (failed.length && this.footer && typeof opts.onRetry === 'function') {
+      const retryBtn = this.footer.createEl('button', {
+        cls: 'mod-warning',
+        text: `重试失败的 ${failed.length} 篇`,
+      });
+      retryBtn.setAttribute('title', failed.map((f) => f.src).join('\n'));
+      retryBtn.onclick = () => {
+        const paths = failed.map((f) => f.src).filter(Boolean);
+        this.close();
+        if (paths.length) opts.onRetry(paths);
+      };
+      if (this.closeBtn) this.footer.insertBefore(retryBtn, this.closeBtn);
+      this.retryBtn = retryBtn;
+    }
   }
 
   fail(message) {

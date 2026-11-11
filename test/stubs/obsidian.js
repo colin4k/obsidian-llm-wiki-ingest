@@ -47,6 +47,13 @@ class FakeEl {
   toggleClass() { return this; }
   empty() { this.children.length = 0; this.textContent = ''; return this; }
   appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+  insertBefore(c, ref) {
+    const i = this.children.indexOf(ref);
+    c.parentNode = this;
+    if (i === -1) this.children.push(c);
+    else this.children.splice(i, 0, c);
+    return c;
+  }
   setAttribute(k, v) { this.attributes[k] = v; return this; }
   getAttribute(k) { return this.attributes[k]; }
   addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }
