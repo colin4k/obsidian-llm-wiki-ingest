@@ -1,0 +1,105 @@
+/* LLM Wiki Ingest —— 插件样式 */
+
+.llm-wiki-ingest-progress .lwi-summary {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.llm-wiki-ingest-progress .lwi-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--background-modifier-border);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.llm-wiki-ingest-progress .lwi-bar-inner {
+  height: 100%;
+  width: 0;
+  background: var(--interactive-accent);
+  transition: width 0.25s ease;
+}
+
+.llm-wiki-ingest-progress .lwi-log {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: var(--font-ui-smaller);
+  font-family: var(--font-monospace);
+  line-height: 1.6;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 8px 10px;
+  background: var(--background-secondary);
+}
+
+.llm-wiki-ingest-progress .lwi-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lwi-ok { color: var(--text-success, #3ca55c); }
+.lwi-skip { color: var(--text-muted); }
+.lwi-err { color: var(--text-error, #d9534f); }
+.lwi-run { color: var(--text-accent); }
+
+.llm-wiki-ingest-progress .lwi-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* 文件选择器 */
+.llm-wiki-picker .lwi-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.llm-wiki-picker .lwi-search {
+  flex: 1;
+}
+
+.llm-wiki-picker .lwi-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+
+.llm-wiki-picker .lwi-item {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--background-modifier-border-faint, transparent);
+}
+
+.llm-wiki-picker .lwi-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-wiki-picker .lwi-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-small);
+}
+
+.llm-wiki-picker .lwi-item-meta {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  white-space: nowrap;
+}
+
+.llm-wiki-picker .lwi-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  gap: 8px;
+}

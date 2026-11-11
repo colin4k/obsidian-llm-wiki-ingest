@@ -1,0 +1,7 @@
+# Obsidian 运行时会写入用户自己的配置，其中包含 API Key
+data.json
+
+# 依赖与系统文件
+node_modules/
+.DS_Store
+*.log
