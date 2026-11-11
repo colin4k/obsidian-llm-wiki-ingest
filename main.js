@@ -1,6 +1,6 @@
 /* eslint-disable */
 /* LLM Wiki Ingest —— 单文件构建产物（由 build.js 从 src/ 生成，勿直接修改） */
-/* 构建时间：2026-11-11T08:13:43.430Z */
+/* 构建时间：2026-11-11T08:20:10.515Z */
 
 (function () {
   'use strict';
@@ -857,13 +857,22 @@ class IngestEngine {
     const hash = md5Of(rawText);
     const size = Buffer.byteLength(rawText, 'utf8');
 
-    // 空文件：只归档
+    // 空文件：只归档（同样遵守“是否移动收件箱外的原文”）
     if (!rawText.trim()) {
-      const archived = await this.archiveSource(rel, { dateStr: day });
+      const archived = this.shouldMoveSource(rel)
+        ? await this.archiveSource(rel, { dateStr: day })
+        : null;
       await this.recordSkip(rel, {
         hash, reason: '空文件，无内容', archived, dateStr: day, summary: '空文件',
       });
-      return { src: rel, ok: true, status: 'skip', message: '空文件：仅归档', ms: Date.now() - started };
+      return {
+        src: rel,
+        ok: true,
+        status: 'skip',
+        moved: Boolean(archived),
+        message: archived ? '空文件：仅归档' : '空文件：已记账，原文未移动（不在收件箱）',
+        ms: Date.now() - started,
+      };
     }
 
     // 台账判重
@@ -892,14 +901,22 @@ class IngestEngine {
       : guessTopic(`${fileName} ${rawText.slice(0, 3000)}`);
 
     if (triage.status === 'skip') {
-      const archived = await this.archiveSource(rel, { dateStr: day });
+      const archived = this.shouldMoveSource(rel)
+        ? await this.archiveSource(rel, { dateStr: day })
+        : null;
       await this.recordSkip(rel, {
         hash, reason: triage.reason || '无实质内容', archived, dateStr: day,
         summary: triage.summary || '无实质内容，仅归档',
       });
       return {
-        src: rel, ok: true, status: 'skip', topic,
-        message: triage.reason || '无实质内容：仅归档',
+        src: rel,
+        ok: true,
+        status: 'skip',
+        topic,
+        moved: Boolean(archived),
+        message: archived
+          ? (triage.reason || '无实质内容：仅归档')
+          : `${triage.reason || '无实质内容'}；原文未移动（不在收件箱）`,
         ms: Date.now() - started,
       };
     }
@@ -994,9 +1011,12 @@ class IngestEngine {
       });
     }
 
+    const whereMoved = archivedAbs
+      ? `原文 \`${archivedAbs}\``
+      : '原文未移动（不在收件箱，见设置「收件箱之外的文件也移动归档」）';
     await this.appendLog(
       `- ${nowIso().slice(0, 16).replace('T', ' ')} **ingest**: [[${title}]] ` +
-      `→ ${this.paths.toWikiRel(wikiRel)} · 原文 \`${archivedAbs || rel}\`\n`,
+      `→ ${this.paths.toWikiRel(wikiRel)} · ${whereMoved}\n`,
     );
 
     return {
@@ -1007,6 +1027,7 @@ class IngestEngine {
       title,
       wikiRel,
       archivedTo: archivedAbs,
+      moved: Boolean(archivedAbs),
       message: summary,
       ms: Date.now() - started,
     };
@@ -1236,7 +1257,8 @@ class IngestEngine {
     });
     await this.appendLog(
       `- ${nowIso().slice(0, 16).replace('T', ' ')} **skip**: \`${rel}\` ` +
-      `(${reason || '无实质内容'})${archived ? ` · 归档 \`${archived}\`` : ''}\n`,
+      `(${reason || '无实质内容'})` +
+      `${archived ? ` · 归档 \`${archived}\`` : ' · 原文未移动（不在收件箱）'}\n`,
     );
   }
 
@@ -2184,14 +2206,15 @@ class LWIProgressModal extends Modal {
     }
     if (line) {
       const st = res ? res.status : 'error';
+      const kept = res && res.moved === false ? ' · 原文保留原处' : '';
       if (st === 'compiled') {
-        line.setText(`✅ ${src} → ${res.wikiRel}`);
+        line.setText(`✅ ${src} → ${res.wikiRel}${kept}`);
         line.className = 'lwi-line lwi-ok';
       } else if (st === 'updated') {
-        line.setText(`🔀 ${src} → 合并进 ${res.wikiRel}`);
+        line.setText(`🔀 ${src} → 合并进 ${res.wikiRel}${kept}`);
         line.className = 'lwi-line lwi-ok';
       } else if (st === 'skip') {
-        line.setText(`⏭️ ${src}（跳过编译）${res.message ? '：' + res.message : ''}`);
+        line.setText(`⏭️ ${src}（跳过编译）${res.message ? '：' + res.message : ''}${kept}`);
         line.className = 'lwi-line lwi-skip';
       } else if (st === 'already') {
         line.setText(`♻️ ${src}（${res.message || '已处理过'}）`);

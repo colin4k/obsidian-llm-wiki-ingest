@@ -483,14 +483,15 @@ class LWIProgressModal extends Modal {
     }
     if (line) {
       const st = res ? res.status : 'error';
+      const kept = res && res.moved === false ? ' · 原文保留原处' : '';
       if (st === 'compiled') {
-        line.setText(`✅ ${src} → ${res.wikiRel}`);
+        line.setText(`✅ ${src} → ${res.wikiRel}${kept}`);
         line.className = 'lwi-line lwi-ok';
       } else if (st === 'updated') {
-        line.setText(`🔀 ${src} → 合并进 ${res.wikiRel}`);
+        line.setText(`🔀 ${src} → 合并进 ${res.wikiRel}${kept}`);
         line.className = 'lwi-line lwi-ok';
       } else if (st === 'skip') {
-        line.setText(`⏭️ ${src}（跳过编译）${res.message ? '：' + res.message : ''}`);
+        line.setText(`⏭️ ${src}（跳过编译）${res.message ? '：' + res.message : ''}${kept}`);
         line.className = 'lwi-line lwi-skip';
       } else if (st === 'already') {
         line.setText(`♻️ ${src}（${res.message || '已处理过'}）`);

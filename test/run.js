@@ -338,9 +338,24 @@ async function main() {
   await engine4.manifest.load();
   const r4 = await engine4.processOne(noteRel);
   eq(r4.status, 'compiled', '收件箱外的笔记也能编译');
+  eq(r4.moved, false, '返回值标注「原文未移动」');
   ok(fs.existsSync(path.join(vaultDir, noteRel)), '默认不移动收件箱之外的文件');
   const wiki4 = fs.readFileSync(path.join(vaultDir, r4.wikiRel), 'utf8');
   ok(wiki4.includes(`source: "${path.join(vaultDir, noteRel)}"`), 'source 指向原文件绝对路径');
+
+  // -------------------------------------------------------------------------
+  // 收件箱外被跳过的文章：记账但不移动（回归用例：skip 分支曾绕过开关）
+  // -------------------------------------------------------------------------
+  fs.mkdirSync(path.join(vaultDir, '外部'), { recursive: true });
+  fs.writeFileSync(path.join(vaultDir, '外部', '外部广告.md'),
+    '# 限时优惠\n\n扫码加微信，课程只要 9.9 元。\n', 'utf8');
+  const engine6 = new IngestEngine({ settings, vfs, paths, manifest, client });
+  await engine6.manifest.load();
+  const r6 = await engine6.processOne('外部/外部广告.md');
+  eq(r6.status, 'skip', '收件箱外的广告被判 skip');
+  eq(r6.moved, false, '跳过时同样不移动收件箱外的原文');
+  ok(fs.existsSync(path.join(vaultDir, '外部', '外部广告.md')), '被跳过的外部原文仍在原处');
+  ok(!fs.existsSync(path.join(archiveDir, dateStr, '外部广告.md')), '外部广告没有被搬进归档');
 
   // -------------------------------------------------------------------------
   // Anthropic 格式的请求构造

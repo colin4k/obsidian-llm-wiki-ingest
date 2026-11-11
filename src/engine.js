@@ -376,13 +376,22 @@ class IngestEngine {
     const hash = md5Of(rawText);
     const size = Buffer.byteLength(rawText, 'utf8');
 
-    // 空文件：只归档
+    // 空文件：只归档（同样遵守“是否移动收件箱外的原文”）
     if (!rawText.trim()) {
-      const archived = await this.archiveSource(rel, { dateStr: day });
+      const archived = this.shouldMoveSource(rel)
+        ? await this.archiveSource(rel, { dateStr: day })
+        : null;
       await this.recordSkip(rel, {
         hash, reason: '空文件，无内容', archived, dateStr: day, summary: '空文件',
       });
-      return { src: rel, ok: true, status: 'skip', message: '空文件：仅归档', ms: Date.now() - started };
+      return {
+        src: rel,
+        ok: true,
+        status: 'skip',
+        moved: Boolean(archived),
+        message: archived ? '空文件：仅归档' : '空文件：已记账，原文未移动（不在收件箱）',
+        ms: Date.now() - started,
+      };
     }
 
     // 台账判重
@@ -411,14 +420,22 @@ class IngestEngine {
       : guessTopic(`${fileName} ${rawText.slice(0, 3000)}`);
 
     if (triage.status === 'skip') {
-      const archived = await this.archiveSource(rel, { dateStr: day });
+      const archived = this.shouldMoveSource(rel)
+        ? await this.archiveSource(rel, { dateStr: day })
+        : null;
       await this.recordSkip(rel, {
         hash, reason: triage.reason || '无实质内容', archived, dateStr: day,
         summary: triage.summary || '无实质内容，仅归档',
       });
       return {
-        src: rel, ok: true, status: 'skip', topic,
-        message: triage.reason || '无实质内容：仅归档',
+        src: rel,
+        ok: true,
+        status: 'skip',
+        topic,
+        moved: Boolean(archived),
+        message: archived
+          ? (triage.reason || '无实质内容：仅归档')
+          : `${triage.reason || '无实质内容'}；原文未移动（不在收件箱）`,
         ms: Date.now() - started,
       };
     }
@@ -513,9 +530,12 @@ class IngestEngine {
       });
     }
 
+    const whereMoved = archivedAbs
+      ? `原文 \`${archivedAbs}\``
+      : '原文未移动（不在收件箱，见设置「收件箱之外的文件也移动归档」）';
     await this.appendLog(
       `- ${nowIso().slice(0, 16).replace('T', ' ')} **ingest**: [[${title}]] ` +
-      `→ ${this.paths.toWikiRel(wikiRel)} · 原文 \`${archivedAbs || rel}\`\n`,
+      `→ ${this.paths.toWikiRel(wikiRel)} · ${whereMoved}\n`,
     );
 
     return {
@@ -526,6 +546,7 @@ class IngestEngine {
       title,
       wikiRel,
       archivedTo: archivedAbs,
+      moved: Boolean(archivedAbs),
       message: summary,
       ms: Date.now() - started,
     };
@@ -755,7 +776,8 @@ class IngestEngine {
     });
     await this.appendLog(
       `- ${nowIso().slice(0, 16).replace('T', ' ')} **skip**: \`${rel}\` ` +
-      `(${reason || '无实质内容'})${archived ? ` · 归档 \`${archived}\`` : ''}\n`,
+      `(${reason || '无实质内容'})` +
+      `${archived ? ` · 归档 \`${archived}\`` : ' · 原文未移动（不在收件箱）'}\n`,
     );
   }
 
